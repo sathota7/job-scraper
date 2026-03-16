@@ -1,14 +1,11 @@
 import os
 import sys
-from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 
 # Load .env BEFORE any project imports so config picks up env vars
 load_dotenv()
 
-from apscheduler.schedulers.blocking import BlockingScheduler
-from apscheduler.triggers.interval import IntervalTrigger
 from loguru import logger
 
 import config
@@ -24,7 +21,7 @@ logger.add(
     format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | {message}",
 )
 logger.add(
-    os.path.join(config.LOG_DIR, "job_scraper_{time:YYYY-MM-DD}.log"),
+    os.path.join(config.LOG_DIR, "job_scraper_{time:YYYY-MM-DD_HH-mm-ss}.log"),
     level="DEBUG",
     rotation="10 MB",
     retention="7 days",
@@ -70,26 +67,5 @@ def run_pipeline() -> None:
     logger.info("=" * 60)
 
 
-def main() -> None:
-    logger.info("Job Scraper starting up")
-    logger.info(f"Schedule: every {config.SCHEDULE_INTERVAL_HOURS} hour(s)")
-
-    scheduler = BlockingScheduler(timezone="UTC")
-    scheduler.add_job(
-        run_pipeline,
-        trigger=IntervalTrigger(hours=config.SCHEDULE_INTERVAL_HOURS),
-        next_run_time=datetime.now(timezone.utc),  # run immediately on start
-        max_instances=1,
-        coalesce=True,
-        id="job_scraper_pipeline",
-    )
-
-    try:
-        scheduler.start()
-    except KeyboardInterrupt:
-        logger.info("Shutting down scheduler (KeyboardInterrupt)")
-        scheduler.shutdown(wait=False)
-
-
 if __name__ == "__main__":
-    main()
+    run_pipeline()

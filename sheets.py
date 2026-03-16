@@ -83,7 +83,12 @@ def write_new_jobs(scored_df: pd.DataFrame) -> int:
         ~scored_df["job_id"].astype(str).isin(existing_ids)
         & (scored_df["fit_score"] >= config.MIN_SCORE_TO_WRITE)
     )
-    new_jobs = scored_df[mask].reset_index(drop=True)
+    new_jobs = (
+        scored_df[mask]
+        .sort_values("fit_score", ascending=False)
+        .head(config.MAX_JOBS_PER_RUN)
+        .reset_index(drop=True)
+    )
 
     if new_jobs.empty:
         logger.info(

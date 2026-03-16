@@ -22,6 +22,15 @@ def _should_exclude(company_name: str) -> bool:
     return any(kw in name_lower for kw in config.EXCLUDE_COMPANY_KEYWORDS)
 
 
+def _is_excluded_title(title: str) -> bool:
+    if not config.EXCLUDE_TITLE_KEYWORDS:
+        return False
+    if not title or not isinstance(title, str):
+        return False
+    title_lower = title.lower()
+    return any(kw in title_lower for kw in config.EXCLUDE_TITLE_KEYWORDS)
+
+
 def _scrape_combination(site: str, query: str, location: str) -> pd.DataFrame:
     is_remote = location.lower() == "remote"
     try:
@@ -32,7 +41,8 @@ def _scrape_combination(site: str, query: str, location: str) -> pd.DataFrame:
             results_wanted=config.RESULTS_PER_QUERY,
             distance=config.DISTANCE_MILES,
             linkedin_fetch_description=True,
-            is_remote=is_remote if is_remote else None,
+            is_remote=is_remote,
+            hours_old=336,  # 2 weeks
         )
         if df is not None and not df.empty:
             logger.debug(
@@ -85,6 +95,12 @@ def scrape_all() -> pd.DataFrame:
         combined = combined[~combined["company"].apply(_should_exclude)].reset_index(drop=True)
         logger.info(f"After exclusion filter: {len(combined)} jobs (removed {before - len(combined)})")
 
+    # Apply title exclusion filter
+    if config.EXCLUDE_TITLE_KEYWORDS:
+        before = len(combined)
+        combined = combined[~combined["title"].apply(_is_excluded_title)].reset_index(drop=True)
+        logger.info(f"After title exclusion filter: {len(combined)} jobs (removed {before - len(combined)})")
+
     # Add metadata columns
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     combined["date_scraped"] = now_str
@@ -120,18 +136,8 @@ def scrape_all() -> pd.DataFrame:
         if col not in combined.columns:
             combined[col] = ""
 
-    # Prioritize media companies first, then cap
-    media_mask = combined["is_media_company"]
-    media_jobs = combined[media_mask]
-    non_media_jobs = combined[~media_mask]
-    combined = pd.concat([media_jobs, non_media_jobs], ignore_index=True)
-
-    if len(combined) > config.MAX_JOBS_PER_RUN:
-        logger.info(f"Capping at {config.MAX_JOBS_PER_RUN} jobs (had {len(combined)})")
-        combined = combined.iloc[: config.MAX_JOBS_PER_RUN].reset_index(drop=True)
-
     logger.info(
         f"Final job set: {len(combined)} jobs "
-        f"({combined['is_media_company'].sum()} media companies)"
+        f"({combined['is_media_company'].sum()} media companies) — scoring all before capping"
     )
     return combined

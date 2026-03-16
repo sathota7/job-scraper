@@ -1,6 +1,8 @@
 import json
 import re
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import anthropic
 import pandas as pd
@@ -46,7 +48,43 @@ def _load_brag_sheet() -> str:
     return _brag_sheet_text
 
 
-SCORING_SYSTEM = """You are a job fit evaluator. Given a resume and a job description, score how well the candidate fits the role on a scale of 1–10.
+def _build_scoring_system() -> str:
+    sensitivity = config.SEARCH_SENSITIVITY
+
+    if sensitivity == "strict":
+        stance = (
+            "Be conservative in your scoring. Only award high scores (7+) when the candidate "
+            "clearly meets the majority of stated requirements with direct, demonstrable experience. "
+            "Penalize role mismatch, missing tools, or insufficient seniority."
+        )
+        weight_note = (
+            "- Extra weight for roles at media/entertainment/advertising companies (+1 if strong otherwise)\n"
+            "- Prioritize exact title match and specific platform experience (DV360, The Trade Desk, etc.)\n"
+            "- Penalize more than one major skills gap"
+        )
+    elif sensitivity == "liberal":
+        stance = (
+            "Be generous in your scoring. Award credit for transferable skills and adjacent experience. "
+            "A candidate with 2–3 years of broadly relevant experience and strong growth indicators "
+            "should score in the 6–7 range even with some gaps. Cast a wide net."
+        )
+        weight_note = (
+            "- Extra weight for roles at media/entertainment/advertising companies (+1 if strong otherwise)\n"
+            "- Give credit for adjacent roles (e.g., general project management counts toward media PM roles)\n"
+            "- Do not penalize for missing niche tools if core skills are present"
+        )
+    else:  # balanced
+        stance = (
+            "Apply balanced judgment. Score based on genuine fit accounting for both strengths and gaps. "
+            "3 years of focused experience in the domain should score in the 6–8 range for well-matched roles."
+        )
+        weight_note = (
+            "- Extra weight for roles at media/entertainment/advertising companies (+1 if strong otherwise)\n"
+            "- Extra weight for project management and media buying roles specifically\n"
+            "- Consider years of experience, specific tools/platforms mentioned, and industry background"
+        )
+
+    return f"""You are a job fit evaluator. Given a resume and a job description, score how well the candidate fits the role on a scale of 1–10.
 
 Scoring rubric:
 - 9–10: Exceptional fit — candidate meets nearly all requirements, role is in their core domain
@@ -55,13 +93,14 @@ Scoring rubric:
 - 3–4: Weak fit — limited relevant experience, significant gaps
 - 1–2: Poor fit — role is misaligned with candidate's background
 
+Scoring stance:
+{stance}
+
 Scoring weights:
-- Extra weight for roles at media/entertainment/advertising companies (+1 point if strong otherwise)
-- Extra weight for project management and media buying roles specifically
-- Consider years of experience, specific tools/platforms mentioned, and industry background
+{weight_note}
 
 You MUST respond with ONLY valid JSON in this exact format, no other text:
-{"score": <integer 1-10>, "reasoning": "<one concise sentence explaining the score>"}"""
+{{"score": <integer 1-10>, "reasoning": "<one concise sentence explaining the score>"}}\""""
 
 
 SUGGESTIONS_SYSTEM = """You are an expert career coach specializing in media, advertising, and project management roles.
@@ -128,7 +167,7 @@ Score this job fit and respond with JSON only."""
             response = client.messages.create(
                 model=config.SCORING_MODEL,
                 max_tokens=config.SCORING_MAX_TOKENS,
-                system=SCORING_SYSTEM,
+                system=_build_scoring_system(),
                 messages=[{"role": "user", "content": user_message}],
             )
             return _parse_score_response(response.content[0].text)
@@ -193,6 +232,35 @@ Provide 3–5 specific bullet points on how to tailor this resume to this job. W
     return ""
 
 
+def _process_job(
+    idx: int,
+    total: int,
+    job: pd.Series,
+    resume: str,
+    brag_sheet: str,
+    semaphore: threading.BoundedSemaphore,
+) -> tuple[int, int, str, str]:
+    title = job.get("title", "unknown")
+    company = job.get("company", "unknown")
+    logger.debug(f"  Scoring [{idx + 1}/{total}]: {title} @ {company}")
+
+    with semaphore:
+        result = _score_job(job, resume, brag_sheet)
+        time.sleep(config.SCORING_RATE_LIMIT_DELAY)
+
+    score = int(result.get("score", 0))
+    reasoning = result.get("reasoning", "")
+
+    suggestion = ""
+    if score >= config.SUGGESTIONS_MIN_SCORE:
+        logger.debug(f"    Score {score} >= {config.SUGGESTIONS_MIN_SCORE} — generating resume suggestions")
+        with semaphore:
+            suggestion = _get_resume_suggestions(job, resume, brag_sheet)
+            time.sleep(config.SCORING_RATE_LIMIT_DELAY)
+
+    return idx, score, reasoning, suggestion
+
+
 def score_jobs(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         logger.warning("No jobs to score.")
@@ -205,33 +273,28 @@ def score_jobs(df: pd.DataFrame) -> pd.DataFrame:
     brag_sheet = _load_brag_sheet()
     if brag_sheet:
         logger.info("Brag sheet will be included in scoring and suggestions.")
-    logger.info(f"Scoring {len(df)} jobs with {config.SCORING_MODEL}...")
 
-    scores = []
-    reasonings = []
-    suggestions = []
+    total = len(df)
+    workers = config.SCORING_CONCURRENT_REQUESTS
+    logger.info(f"Scoring {total} jobs with {config.SCORING_MODEL} ({workers} parallel workers)...")
 
-    for idx, (_, job) in enumerate(df.iterrows()):
-        title = job.get("title", "unknown")
-        company = job.get("company", "unknown")
-        logger.debug(f"  Scoring [{idx + 1}/{len(df)}]: {title} @ {company}")
+    semaphore = threading.BoundedSemaphore(workers)
+    jobs_list = [(i, row) for i, (_, row) in enumerate(df.iterrows())]
 
-        result = _score_job(job, resume, brag_sheet)
-        score = int(result.get("score", 0))
-        reasoning = result.get("reasoning", "")
-        scores.append(score)
-        reasonings.append(reasoning)
+    results: dict[int, tuple[int, str, str]] = {}
 
-        time.sleep(config.SCORING_RATE_LIMIT_DELAY)
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(_process_job, idx, total, job, resume, brag_sheet, semaphore): idx
+            for idx, job in jobs_list
+        }
+        for future in as_completed(futures):
+            idx, score, reasoning, suggestion = future.result()
+            results[idx] = (score, reasoning, suggestion)
 
-        # Resume suggestions for strong-fit jobs
-        if score >= config.SUGGESTIONS_MIN_SCORE:
-            logger.debug(f"    Score {score} >= {config.SUGGESTIONS_MIN_SCORE} — generating resume suggestions")
-            suggestion = _get_resume_suggestions(job, resume, brag_sheet)
-            time.sleep(config.SCORING_RATE_LIMIT_DELAY)
-        else:
-            suggestion = ""
-        suggestions.append(suggestion)
+    scores = [results[i][0] for i in range(total)]
+    reasonings = [results[i][1] for i in range(total)]
+    suggestions = [results[i][2] for i in range(total)]
 
     df = df.copy()
     df["fit_score"] = scores
