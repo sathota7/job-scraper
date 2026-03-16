@@ -14,6 +14,23 @@ _client: anthropic.Anthropic | None = None
 _resume_text: str | None = None
 _brag_sheet_text: str | None = None
 
+# Global rate limiter — enforces minimum spacing between API calls across all workers
+_api_lock = threading.Lock()
+_last_api_call: float = 0.0
+
+
+def _rate_limited_api_call(fn):
+    """Call fn() while enforcing SCORING_RATE_LIMIT_DELAY between all API calls globally."""
+    global _last_api_call
+    with _api_lock:
+        elapsed = time.monotonic() - _last_api_call
+        wait = config.SCORING_RATE_LIMIT_DELAY - elapsed
+        if wait > 0:
+            time.sleep(wait)
+        result = fn()
+        _last_api_call = time.monotonic()
+    return result
+
 
 def _get_client() -> anthropic.Anthropic:
     global _client
@@ -164,12 +181,12 @@ Score this job fit and respond with JSON only."""
 
     for attempt in range(2):
         try:
-            response = client.messages.create(
+            response = _rate_limited_api_call(lambda: client.messages.create(
                 model=config.SCORING_MODEL,
                 max_tokens=config.SCORING_MAX_TOKENS,
                 system=_build_scoring_system(),
                 messages=[{"role": "user", "content": user_message}],
-            )
+            ))
             return _parse_score_response(response.content[0].text)
         except anthropic.RateLimitError:
             if attempt == 0:
@@ -208,12 +225,12 @@ Provide 3–5 specific bullet points on how to tailor this resume to this job. W
 
     for attempt in range(2):
         try:
-            response = client.messages.create(
+            response = _rate_limited_api_call(lambda: client.messages.create(
                 model=config.SUGGESTIONS_MODEL,
                 max_tokens=config.SUGGESTIONS_MAX_TOKENS,
                 system=SUGGESTIONS_SYSTEM,
                 messages=[{"role": "user", "content": user_message}],
-            )
+            ))
             raw = response.content[0].text.strip()
             # Convert newlines to pipe-separated for clean Sheets storage
             bullets = [line.strip() for line in raw.splitlines() if line.strip()]
@@ -246,7 +263,6 @@ def _process_job(
 
     with semaphore:
         result = _score_job(job, resume, brag_sheet)
-        time.sleep(config.SCORING_RATE_LIMIT_DELAY)
 
     score = int(result.get("score", 0))
     reasoning = result.get("reasoning", "")
@@ -256,7 +272,6 @@ def _process_job(
         logger.debug(f"    Score {score} >= {config.SUGGESTIONS_MIN_SCORE} — generating resume suggestions")
         with semaphore:
             suggestion = _get_resume_suggestions(job, resume, brag_sheet)
-            time.sleep(config.SCORING_RATE_LIMIT_DELAY)
 
     return idx, score, reasoning, suggestion
 

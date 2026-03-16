@@ -96,6 +96,8 @@ EXCLUDE_TITLE_KEYWORDS: list[str] = [
     "evp",
     "chief",
     "president",
+    "lead",
+    "senior manager",
 ]
 
 # --- Search Sensitivity ---
@@ -122,7 +124,7 @@ SCORING_MODEL = "claude-haiku-4-5-20251001"
 SUGGESTIONS_MODEL = "claude-sonnet-4-6"
 SCORING_MAX_TOKENS = 300
 SUGGESTIONS_MAX_TOKENS = 600
-SCORING_RATE_LIMIT_DELAY = 0.5  # seconds between Claude API calls
+SCORING_RATE_LIMIT_DELAY = 1.5  # seconds between Claude API calls (globally enforced across all workers)
 SCORING_CONCURRENT_REQUESTS = int(os.getenv("SCORING_CONCURRENT_REQUESTS", "5"))
 
 # --- Scheduler ---
