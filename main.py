@@ -1,5 +1,7 @@
+import io
 import os
 import sys
+from datetime import datetime
 
 from dotenv import load_dotenv
 
@@ -13,6 +15,9 @@ import config
 # --- Logging setup ---
 os.makedirs(config.LOG_DIR, exist_ok=True)
 
+_run_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+_log_buffer = io.StringIO()
+
 logger.remove()
 logger.add(
     sys.stderr,
@@ -25,6 +30,11 @@ logger.add(
     level="DEBUG",
     rotation="10 MB",
     retention="7 days",
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{line} | {message}",
+)
+logger.add(
+    _log_buffer,
+    level="DEBUG",
     format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{line} | {message}",
 )
 
@@ -69,3 +79,6 @@ def run_pipeline() -> None:
 
 if __name__ == "__main__":
     run_pipeline()
+
+    from drive_logger import upload_log
+    upload_log(_log_buffer.getvalue(), _run_timestamp)
