@@ -1,0 +1,9 @@
+Score lower if the role is contract, freelance, seasonal, or temporary — do not score above 4 for any such position regardless of skill alignment. Do not score above 3 for internships. Do not score above 4 for roles in nonprofit, education, or museum sectors, as the user has explicitly no interest in these environments.
+
+The user is targeting early-to-mid-level roles (coordinator to manager level) with roughly 2–3 years of experience. Do not score above 5 for roles requiring 5+ years of experience, and do not score above 4 for roles explicitly labeled "Senior" requiring 7+ years — these are too advanced regardless of partial skill overlap.
+
+Give extra weight to roles in media, entertainment, broadcasting, sports, or corporate environments. Score up when roles involve project coordination, administrative operations, budget tracking, cross-departmental collaboration, event planning, or being a primary point of contact — these are core strengths. Give moderate weight to roles outside media if the core responsibilities are highly transferable.
+
+Score lower if the role requires deep industry-specific expertise the user lacks, such as healthcare agency work, beauty/haircare product development, digital campaign management, or eCommerce implementation, unless the operational overlap is strong.
+
+The AI tends to overscore senior roles, contract positions, and niche-industry jobs. Consistently apply hard penalties for employment type and seniority mismatches before evaluating skill fit.

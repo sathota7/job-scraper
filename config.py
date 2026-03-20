@@ -10,6 +10,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_PATH", "credentials.json")
 SPREADSHEET_NAME = os.getenv("SPREADSHEET_NAME", "Job Scraper Results")
 WORKSHEET_NAME = "Jobs"
+CONFIG_SHEET_NAME = "Config"  # stores synthesized preferences between stateless runs
 
 # --- Job Search Profiles ---
 # Comment out entries in ACTIVE_CATEGORIES to disable a group.
@@ -141,6 +142,8 @@ SHEET_COLUMNS = [
     "job_url",
     "is_media_company",
     "fit_score",
+    "manual_score",           # user fills in — bot always writes blank for new rows
+    "manual_score_reasoning", # user fills in — bot always writes blank for new rows
     "reasoning",
     "resume_suggestions",
     "date_posted",
@@ -152,3 +155,9 @@ RESUME_PATH = "data/resume.txt"
 BRAG_SHEET_PATH = os.getenv("BRAG_SHEET_PATH", "data/brag_sheet.txt")  # optional
 CREDENTIALS_PATH = GOOGLE_CREDENTIALS_PATH
 LOG_DIR = "logs"
+
+# --- Feedback / RL ---
+FEEDBACK_CACHE_PATH = "data/feedback_cache.json"
+USER_PREFERENCES_PATH = "data/user_preferences.txt"
+# Max calibration examples injected into the scoring prompt (controls token cost)
+FEEDBACK_MAX_EXAMPLES = 8

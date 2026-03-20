@@ -45,6 +45,14 @@ def run_pipeline() -> None:
     logger.info("=" * 60)
 
     try:
+        # Step 0: Sync feedback — reads manual scores from the sheet and
+        # re-synthesizes user preferences if new scores have appeared since last run
+        import feedback
+        import scorer
+        logger.info("Step 0/3 — Syncing feedback from sheet...")
+        feedback.sync_and_maybe_synthesize()
+        scorer.reset_feedback_context()  # ensure scorer picks up any updated preferences
+
         # Step 1: Scrape
         from scraper import scrape_all
         logger.info("Step 1/3 — Scraping jobs...")
@@ -56,7 +64,7 @@ def run_pipeline() -> None:
 
         logger.info(f"Step 1 complete: {len(jobs_df)} jobs scraped")
 
-        # Step 2: Score
+        # Step 2: Score (uses updated feedback context loaded in Step 0)
         from scorer import score_jobs
         logger.info("Step 2/3 — Scoring jobs with Claude...")
         scored_df = score_jobs(jobs_df)

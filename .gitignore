@@ -2,6 +2,7 @@
 credentials.json
 *.json
 data/resume.txt
+data/brag_sheet.txt
 logs/
 __pycache__/
 .venv/

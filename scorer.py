@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import threading
 import time
@@ -13,6 +14,7 @@ import config
 _client: anthropic.Anthropic | None = None
 _resume_text: str | None = None
 _brag_sheet_text: str | None = None
+_feedback_context: str | None = None  # injected once per process
 
 # Global rate limiter — enforces minimum spacing between API calls across all workers
 _api_lock = threading.Lock()
@@ -51,6 +53,68 @@ def _load_resume() -> str:
                 "Please create data/resume.txt with your resume text before running."
             )
     return _resume_text
+
+
+def reset_feedback_context() -> None:
+    """Clear the cached feedback context so the next scoring run reloads from disk.
+    Called by main.py after each feedback sync."""
+    global _feedback_context
+    _feedback_context = None
+
+
+def _load_feedback_context() -> str:
+    """Load synthesized user preferences + top calibration examples into a single block."""
+    global _feedback_context
+    if _feedback_context is not None:
+        return _feedback_context
+
+    parts = []
+
+    # 1. Synthesized user preferences (written by `python feedback.py synthesize`)
+    if os.path.exists(config.USER_PREFERENCES_PATH):
+        with open(config.USER_PREFERENCES_PATH, "r", encoding="utf-8") as f:
+            prefs = f.read().strip()
+        if prefs:
+            parts.append(f"USER PREFERENCES (calibration guide based on past feedback):\n{prefs}")
+
+    # 2. Top calibration examples from feedback cache
+    if os.path.exists(config.FEEDBACK_CACHE_PATH):
+        with open(config.FEEDBACK_CACHE_PATH, "r", encoding="utf-8") as f:
+            cache = json.load(f)
+        examples = cache.get("examples", [])
+        if examples:
+            # Prioritize examples where AI was most wrong (highest |diff|), then a few confirmed-correct
+            wrong = sorted(
+                [e for e in examples if abs(e.get("diff", 0)) > 1],
+                key=lambda e: abs(e.get("diff", 0)),
+                reverse=True,
+            )
+            correct = [e for e in examples if e.get("diff", 0) == 0][:2]
+            selected = (wrong[: config.FEEDBACK_MAX_EXAMPLES - len(correct)] + correct)
+            if selected:
+                lines = ["CALIBRATION EXAMPLES (past jobs with AI score → user's actual score):"]
+                for e in selected:
+                    diff = e.get("diff", 0)
+                    direction = "AI overscored" if diff < 0 else ("AI underscored" if diff > 0 else "AI was correct")
+                    lines.append(
+                        f'  • "{e["title"]}" at {e["company"]} | '
+                        f'AI={e["ai_score"]} → manual={e["manual_score"]} ({direction}) | '
+                        f'Reason: {e["manual_score_reasoning"][:120]}'
+                    )
+                parts.append("\n".join(lines))
+
+    if parts:
+        context = "\n\n".join(parts)
+        logger.debug(
+            f"Feedback context loaded: "
+            f"{'preferences ✓' if os.path.exists(config.USER_PREFERENCES_PATH) else 'preferences ✗'}, "
+            f"{len([e for p in parts for e in [p] if 'CALIBRATION' in p])} calibration blocks"
+        )
+        _feedback_context = context
+    else:
+        _feedback_context = ""
+
+    return _feedback_context
 
 
 def _load_brag_sheet() -> str:
@@ -101,6 +165,9 @@ def _build_scoring_system() -> str:
             "- Consider years of experience, specific tools/platforms mentioned, and industry background"
         )
 
+    feedback = _load_feedback_context()
+    feedback_section = f"\n\n{feedback}" if feedback else ""
+
     return f"""You are a job fit evaluator. Given a resume and a job description, score how well the candidate fits the role on a scale of 1–10.
 
 Scoring rubric:
@@ -114,7 +181,7 @@ Scoring stance:
 {stance}
 
 Scoring weights:
-{weight_note}
+{weight_note}{feedback_section}
 
 You MUST respond with ONLY valid JSON in this exact format, no other text:
 {{"score": <integer 1-10>, "reasoning": "<one concise sentence explaining the score>"}}\""""
