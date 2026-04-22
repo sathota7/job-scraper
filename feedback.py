@@ -76,7 +76,9 @@ def _safe_int(val) -> int:
 def _load_cache() -> dict:
     if os.path.exists(config.FEEDBACK_CACHE_PATH):
         with open(config.FEEDBACK_CACHE_PATH) as f:
-            return json.load(f)
+            content = f.read().strip()
+            if content:
+                return json.loads(content)
     return {"examples": [], "count": 0}
 
 
