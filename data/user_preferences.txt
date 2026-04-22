@@ -1,9 +1,13 @@
-Score lower if the role is contract, freelance, seasonal, or temporary — do not score above 4 for any such position regardless of skill alignment. Do not score above 3 for internships. Do not score above 4 for roles in nonprofit, education, or museum sectors, as the user has explicitly no interest in these environments.
+Score higher for roles explicitly targeting candidates with fewer than 3 years of experience — titles like associate, coordinator, junior, or project manager I are the target sweet spot. These should score 6–9 depending on fit.
 
-The user is targeting early-to-mid-level roles (coordinator to manager level) with roughly 2–3 years of experience. Do not score above 5 for roles requiring 5+ years of experience, and do not score above 4 for roles explicitly labeled "Senior" requiring 7+ years — these are too advanced regardless of partial skill overlap.
+Cap scores at 4 for any role that requires 4 or more years of project management experience. Treat this as a hard ceiling regardless of how well the rest of the posting matches.
 
-Give extra weight to roles in media, entertainment, broadcasting, sports, or corporate environments. Score up when roles involve project coordination, administrative operations, budget tracking, cross-departmental collaboration, event planning, or being a primary point of contact — these are core strengths. Give moderate weight to roles outside media if the core responsibilities are highly transferable.
+Do not penalize for industry. Project management skills transfer across all sectors — tech, healthcare, finance, creative, operations, and others are all equally valid. Only score down on industry if the role requires deep domain expertise (e.g., clinical trial PM requiring a medical background).
 
-Score lower if the role requires deep industry-specific expertise the user lacks, such as healthcare agency work, beauty/haircare product development, digital campaign management, or eCommerce implementation, unless the operational overlap is strong.
+Score lower when job postings explicitly require 5+ years of experience; this is a hard disqualifier and no role demanding that threshold should score above 3.
 
-The AI tends to overscore senior roles, contract positions, and niche-industry jobs. Consistently apply hard penalties for employment type and seniority mismatches before evaluating skill fit.
+Do not score above 4 for contract, temp, freelance, seasonal, or internship roles under any circumstances.
+
+Penalize roles in news media significantly. If a position is primarily tied to news operations, broadcast journalism, or news-focused products, reduce the score by at least 2–3 points.
+
+The user is an early-career professional targeting their first or second PM role. Calibrate seniority expectations accordingly — roles requiring extensive leadership or team management experience should be scored down even when the title sounds junior.

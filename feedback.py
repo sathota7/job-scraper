@@ -107,7 +107,6 @@ def sync_from_sheet(spreadsheet: gspread.Spreadsheet) -> list[dict]:
             "job_id": str(row.get("job_id", "")),
             "title": str(row.get("title", "")),
             "company": str(row.get("company", "")),
-            "is_media_company": str(row.get("is_media_company", "")).lower() in ("true", "1", "yes"),
             "description_snippet": str(row.get("description_snippet", ""))[:600],
             "ai_score": ai_score,
             "manual_score": manual_score,
@@ -188,7 +187,7 @@ def synthesize_preferences(examples: list[dict] | None = None) -> str:
         return ""
 
     examples_text = "\n\n".join(
-        f'Job: "{e["title"]}" at {e["company"]} (media={e["is_media_company"]})\n'
+        f'Job: "{e["title"]}" at {e["company"]})\n'
         f'AI score: {e["ai_score"]} | Manual score: {e["manual_score"]} | Diff: {e["diff"]:+d}\n'
         f'User reasoning: {e["manual_score_reasoning"]}'
         for e in examples

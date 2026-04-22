@@ -14,27 +14,43 @@ CONFIG_SHEET_NAME = "Config"  # stores synthesized preferences between stateless
 
 # --- Job Search Profiles ---
 # Comment out entries in ACTIVE_CATEGORIES to disable a group.
+# JOB_CATEGORIES = {
+#     "media_buying": [
+#         "media buyer",
+#         "programmatic manager",
+#         "paid media manager",
+#         "digital media manager",
+#         "media planner",
+#     ],
+#     "account_management": [
+#         "media account manager",
+#         "client services manager",
+#         "account manager advertising",
+#     ],
+#     "project_management": [
+#         "project manager",
+#         "campaign manager",
+#         "marketing project manager",
+#     ],
+# }
+
 JOB_CATEGORIES = {
-    "media_buying": [
-        "media buyer",
-        "programmatic manager",
-        "paid media manager",
-        "digital media manager",
-        "media planner",
+
+    # Junior/entry-level PM titles across all industries
+    "junior_pm_core": [
+        "associate project manager",
+        "junior project manager",
+        "project coordinator",
+        "project manager I",
+        "entry level project manager",
+        "program coordinator",
+        "project specialist",
+        "associate program manager",
     ],
-    "account_management": [
-        "media account manager",
-        "client services manager",
-        "account manager advertising",
-    ],
-    "project_management": [
-        "project manager",
-        "campaign manager",
-        "marketing project manager",
-    ],
+
 }
 
-ACTIVE_CATEGORIES = ["media_buying", "account_management", "project_management"]
+ACTIVE_CATEGORIES = ["junior_pm_core"]
 
 # Derived — scraper.py reads this unchanged
 SEARCH_QUERIES = [
@@ -57,34 +73,10 @@ LOCATIONS = [
 RESULTS_PER_QUERY = 20
 DISTANCE_MILES = 50
 MAX_JOBS_PER_RUN = 100
+SCRAPING_CONCURRENT_WORKERS = int(os.environ.get("SCRAPING_CONCURRENT_WORKERS", "4"))
 
-MEDIA_COMPANY_KEYWORDS = [
-    "media",
-    "entertainment",
-    "advertising",
-    "agency",
-    "digital",
-    "broadcast",
-    "publishing",
-    "content",
-    "marketing",
-    "creative",
-    "production",
-    "film",
-    "television",
-    "radio",
-    "streaming",
-    "pr ",
-    "communications",
-    "public relations",
-    "branding",
-    "omnicom",
-    "wpp",
-    "publicis",
-    "interpublic",
-    "dentsu",
-    "havas",
-]
+
+
 
 EXCLUDE_COMPANY_KEYWORDS: list[str] = []
 
@@ -97,8 +89,34 @@ EXCLUDE_TITLE_KEYWORDS: list[str] = [
     "evp",
     "chief",
     "president",
-    "lead",
     "senior manager",
+    "sr. manager",
+    "sr manager",
+    "principal",
+    "manager ii",
+    "manager iii",
+    "lead",
+    "construction",
+    "clinical",
+    "healthcare",
+    "nurse",
+    "software engineer",
+    "data engineer",
+    "devops",
+    "cloud",
+    "infrastructure",
+    "supply chain",
+    "logistics",
+    "warehouse",
+    "retail",
+    "restaurant",
+    "legal",
+    "compliance",
+    "finance",
+    "accounting",
+    "sales",
+    "hvac",
+    "facilities",
 ]
 
 # --- Search Sensitivity ---
@@ -140,7 +158,6 @@ SHEET_COLUMNS = [
     "location",
     "site",
     "job_url",
-    "is_media_company",
     "fit_score",
     "manual_score",           # user fills in — bot always writes blank for new rows
     "manual_score_reasoning", # user fills in — bot always writes blank for new rows

@@ -22,16 +22,16 @@ _last_api_call: float = 0.0
 
 
 def _rate_limited_api_call(fn):
-    """Call fn() while enforcing SCORING_RATE_LIMIT_DELAY between all API calls globally."""
+    """Enforce minimum spacing between API call initiations across all workers."""
     global _last_api_call
     with _api_lock:
         elapsed = time.monotonic() - _last_api_call
         wait = config.SCORING_RATE_LIMIT_DELAY - elapsed
         if wait > 0:
             time.sleep(wait)
-        result = fn()
         _last_api_call = time.monotonic()
-    return result
+    # Lock released — actual call runs concurrently with other workers
+    return fn()
 
 
 def _get_client() -> anthropic.Anthropic:
@@ -139,30 +139,33 @@ def _build_scoring_system() -> str:
             "Penalize role mismatch, missing tools, or insufficient seniority."
         )
         weight_note = (
-            "- Extra weight for roles at media/entertainment/advertising companies (+1 if strong otherwise)\n"
-            "- Prioritize exact title match and specific platform experience (DV360, The Trade Desk, etc.)\n"
+            "- Prioritize exact title match (associate PM, project coordinator, junior PM) and years of experience fit\n"
+            "- Cap score at 4 for any role requiring 4+ years of PM experience\n"
             "- Penalize more than one major skills gap"
         )
     elif sensitivity == "liberal":
         stance = (
             "Be generous in your scoring. Award credit for transferable skills and adjacent experience. "
-            "A candidate with 2–3 years of broadly relevant experience and strong growth indicators "
+            "A candidate with 1–3 years of broadly relevant experience and strong growth indicators "
             "should score in the 6–7 range even with some gaps. Cast a wide net."
         )
         weight_note = (
-            "- Extra weight for roles at media/entertainment/advertising companies (+1 if strong otherwise)\n"
-            "- Give credit for adjacent roles (e.g., general project management counts toward media PM roles)\n"
-            "- Do not penalize for missing niche tools if core skills are present"
+            "- Give credit for adjacent roles (e.g., operations coordinator, program specialist count toward junior PM)\n"
+            "- Do not penalize for industry — PM skills transfer across all sectors\n"
+            "- Do not penalize for missing niche tools if core project management skills are present"
         )
     else:  # balanced
         stance = (
             "Apply balanced judgment. Score based on genuine fit accounting for both strengths and gaps. "
-            "3 years of focused experience in the domain should score in the 6–8 range for well-matched roles."
+            "A candidate with 1–3 years of project coordination or adjacent experience should score 6–8 "
+            "for well-matched junior PM roles. Industry does not matter — PM skills transfer across sectors."
         )
         weight_note = (
-            "- Extra weight for roles at media/entertainment/advertising companies (+1 if strong otherwise)\n"
-            "- Extra weight for project management and media buying roles specifically\n"
-            "- Consider years of experience, specific tools/platforms mentioned, and industry background"
+            "- Extra weight for roles explicitly labeled entry-level, associate, coordinator, or junior\n"
+            "- Extra weight for roles listing 0–3 years of experience as the requirement\n"
+            "- Cap score at 4 for any role requiring 4+ years of PM experience\n"
+            "- Do not penalize for industry — cross-industry PM roles score equally to media/tech/any sector\n"
+            "- Media company background is a mild positive signal only, not a requirement"
         )
 
     feedback = _load_feedback_context()
@@ -187,7 +190,7 @@ You MUST respond with ONLY valid JSON in this exact format, no other text:
 {{"score": <integer 1-10>, "reasoning": "<one concise sentence explaining the score>"}}\""""
 
 
-SUGGESTIONS_SYSTEM = """You are an expert career coach specializing in media, advertising, and project management roles.
+SUGGESTIONS_SYSTEM = """You are an expert career coach specializing in project management and early-career professional development.
 Given a resume and a job description, provide 3–5 specific, actionable bullet points on how the candidate should tailor their resume to this specific job.
 
 Each bullet point must:
@@ -231,7 +234,6 @@ def _score_job(job: pd.Series, resume: str, brag_sheet: str) -> dict:
     title = str(job.get("title", ""))
     company = str(job.get("company", ""))
     description = str(job.get("description", job.get("description_snippet", "")))[:2000]
-    is_media = job.get("is_media_company", False)
 
     brag_section = f"\nPAST WORK EXPERIENCE / BRAG SHEET:\n{brag_sheet}" if brag_sheet else ""
 
@@ -240,7 +242,6 @@ def _score_job(job: pd.Series, resume: str, brag_sheet: str) -> dict:
 
 JOB TITLE: {title}
 COMPANY: {company}
-IS MEDIA COMPANY: {is_media}
 JOB DESCRIPTION:
 {description}
 
